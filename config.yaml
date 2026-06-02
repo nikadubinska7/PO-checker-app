@@ -1,0 +1,115 @@
+portal_url: "https://vendor.deichmann.com/vendor.portal.web/"
+
+texts:
+  success_popup: "Labels requested successfully."
+  available_status: "available"
+  found_indicator: "Order/s found"
+  zero_orders_indicator: "0 Order/s found"
+  login_indicators:
+    - "Login"
+    - "Sign in"
+    - "User Name"
+    - "Password"
+
+printer_mapping:
+  IN: "India [50]"
+  VN: "Vietnam [30]"
+  HK: "Hong Kong [20]"
+  default: "Hong Kong [20]"
+
+timing:
+  interaction_delay_min_seconds: 0.5
+  interaction_delay_max_seconds: 2.0
+  load_delay_min_seconds: 1.0
+  load_delay_max_seconds: 3.0
+  default_timeout_ms: 15000
+  refresh_timeout_ms: 30000
+  success_timeout_ms: 20000
+
+debug:
+  screenshot_successes: false
+
+selectors:
+  po_input:
+    labels:
+      - "P.O."
+      - "P.O"
+      - "PO"
+      - "Purchase Order"
+    css:
+      - "input[name*='po' i]"
+      - "input[id*='po' i]"
+      - "input[placeholder*='P.O' i]"
+      - "input[placeholder*='PO' i]"
+
+  refresh_button:
+    roles:
+      - role: "button"
+        name: "Refresh"
+    texts:
+      - "Refresh"
+    css:
+      - "button:has-text('Refresh')"
+      - "input[type='button'][value*='Refresh' i]"
+
+  labels_checkbox:
+    css:
+      - "tr:has-text('{{PO}}') input[type='checkbox']"
+      - "td:has-text('Labels') input[type='checkbox']"
+      - "input[type='checkbox'][name*='label' i]"
+      - "input[type='checkbox'][id*='label' i]"
+
+  request_labels_button:
+    roles:
+      - role: "button"
+        name: "Request labels"
+      - role: "button"
+        name: "Request Labels"
+    texts:
+      - "Request labels"
+      - "Request Labels"
+    css:
+      - "button:has-text('Request labels')"
+      - "input[type='button'][value*='Request labels' i]"
+
+  status_cells:
+    css:
+      - "tr:has-text('{{PO}}') td"
+      - "td:has-text('available')"
+
+  printer_dropdown:
+    labels:
+      - "Factory"
+      - "Printer"
+      - "Supplier"
+    roles:
+      - role: "combobox"
+        name: "Factory"
+      - role: "combobox"
+        name: "Printer"
+    css:
+      - "select"
+      - "[role='combobox']"
+
+  final_request_button:
+    roles:
+      - role: "button"
+        name: "Request"
+    texts:
+      - "Request"
+    css:
+      - "button:has-text('Request')"
+      - "input[type='button'][value='Request']"
+
+  ok_button:
+    roles:
+      - role: "button"
+        name: "OK"
+      - role: "button"
+        name: "Ok"
+    texts:
+      - "OK"
+      - "Ok"
+    css:
+      - "button:has-text('OK')"
+      - "input[type='button'][value='OK']"
