@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from .paths import default_runs_dir
+
 
 @dataclass(frozen=True)
 class RunContext:
@@ -14,7 +16,9 @@ class RunContext:
     log_dir: Path
 
 
-def create_run_context(base_dir: str | Path = "runs") -> RunContext:
+def create_run_context(base_dir: str | Path | None = None) -> RunContext:
+    if base_dir is None:
+        base_dir = default_runs_dir()
     root = Path(base_dir)
     root.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")

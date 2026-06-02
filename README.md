@@ -14,7 +14,26 @@ The app uses a visible Playwright browser. Login is manual: click **Open Portal*
 - Saves screenshots for errors and dry-run successes.
 - Writes run folders under `runs/YYYY-MM-DD_HHMMSS_runNNN/`.
 
-## Setup: macOS
+## For Business Users
+
+Use the packaged app when available. Download the package for your laptop from the GitHub Actions build artifacts or a release:
+
+- macOS: open `PO Label Request App.app`.
+- Windows: open `PO Label Request App.exe`.
+
+The packaged app includes the Python application dependencies and Playwright browser files. Business users do not need to install Python, Git, Playwright, or run terminal commands.
+
+First launch notes:
+
+- macOS unsigned internal builds may require right-clicking the app and choosing **Open** the first time.
+- Windows unsigned internal builds may show Microsoft Defender SmartScreen. Choose **More info** and **Run anyway** if you trust the internal build.
+
+Run outputs are saved in a user-writable app folder:
+
+- macOS: `~/Library/Application Support/PO Label Request App`
+- Windows: `%LOCALAPPDATA%\PO Label Request App`
+
+## Developer Setup: macOS
 
 ```bash
 python3 -m venv .venv
@@ -26,7 +45,7 @@ python scripts/create_example_input.py
 python -m po_label_app
 ```
 
-## Setup: Windows
+## Developer Setup: Windows
 
 ```powershell
 python -m venv .venv
@@ -54,6 +73,63 @@ python -m po_label_app
 7. Log in manually in the browser.
 8. Navigate to the correct portal page if the portal does not open there directly.
 9. Click **Start Processing**.
+
+## Building Double-Click Desktop Packages
+
+Build packages on the same operating system you want to distribute to. Build the macOS app on a Mac. Build the Windows app on Windows.
+
+### Build macOS `.app`
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+pip install -e .
+python -m playwright install chromium
+python scripts/create_example_input.py
+python scripts/build_desktop.py
+```
+
+The app will be created under `dist/PO Label Request App.app`.
+
+### Build Windows `.exe`
+
+In PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -r requirements-build.txt
+pip install -e .
+python -m playwright install chromium
+python scripts\create_example_input.py
+python scripts\build_desktop.py
+```
+
+The app will be created under `dist\PO Label Request App\PO Label Request App.exe`.
+
+To distribute it, zip the whole `dist\PO Label Request App` folder. The `.exe` needs the files beside it, including bundled Playwright browser files.
+
+### Build Packages In GitHub
+
+The repository includes `.github/workflows/build-desktop.yml`.
+
+To build both packages without using terminal on the target laptops:
+
+1. Open the repository on GitHub.
+2. Go to **Actions**.
+3. Select **Build desktop packages**.
+4. Click **Run workflow**.
+5. Download the macOS or Windows artifact after the workflow finishes.
+
+### Installer Notes
+
+The build above creates a double-clickable app bundle/folder. A polished installer can be added later:
+
+- macOS: package the `.app` into a `.dmg`.
+- Windows: wrap the `dist\PO Label Request App` folder with Inno Setup or WiX.
 
 ## Input Excel Format
 

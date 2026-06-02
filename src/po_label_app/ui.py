@@ -6,6 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .config import load_config
+from .paths import default_tracking_path
 from .run_context import configure_logging, create_run_context
 from .tracking import ensure_tracking_path
 from .worker import PortalWorker, WorkerEvent
@@ -24,7 +25,7 @@ class LabelRequestApp(tk.Tk):
         self.worker.start()
 
         self.input_path = tk.StringVar()
-        self.tracking_path = tk.StringVar(value=str(Path("runs") / "tracking.xlsx"))
+        self.tracking_path = tk.StringVar(value=str(default_tracking_path()))
         self.dry_run = tk.BooleanVar(value=True)
         self.progress = tk.StringVar(value="0 / 0")
         self.current_po = tk.StringVar(value="-")

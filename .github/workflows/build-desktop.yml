@@ -1,0 +1,56 @@
+name: Build desktop packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build ${{ matrix.os-name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os-name: macos
+            runner: macos-14
+            artifact-name: PO-Label-Request-App-macOS
+            artifact-path: dist/PO Label Request App.app
+          - os-name: windows
+            runner: windows-latest
+            artifact-name: PO-Label-Request-App-Windows
+            artifact-path: dist/PO Label Request App
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-build.txt
+          pip install -e .
+
+      - name: Install Playwright Chromium
+        run: python -m playwright install chromium
+
+      - name: Create example workbook
+        run: python scripts/create_example_input.py
+
+      - name: Build desktop package
+        run: python scripts/build_desktop.py
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.artifact-path }}
+          if-no-files-found: error

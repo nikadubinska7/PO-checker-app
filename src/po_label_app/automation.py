@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 import re
 import threading
@@ -20,6 +21,7 @@ from .models import (
     STATUS_REQUESTED,
 )
 from .run_context import RunContext
+from .paths import bundled_playwright_browsers_dir
 
 
 LOGGER = logging.getLogger(__name__)
@@ -53,6 +55,9 @@ class PortalAutomation:
         self.page: Optional[Page] = None
 
     def open_portal(self) -> None:
+        browsers_dir = bundled_playwright_browsers_dir()
+        if browsers_dir:
+            os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers_dir)
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.launch(headless=False)
         self.context = self.browser.new_context()

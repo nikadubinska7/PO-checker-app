@@ -5,6 +5,9 @@ __pycache__/
 .mypy_cache/
 *.egg-info/
 .DS_Store
+build/
+dist/
+*.spec
 runs/*/
 runs/*.xlsx
 !runs/.gitkeep

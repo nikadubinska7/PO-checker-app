@@ -5,6 +5,8 @@ from typing import Any
 
 import yaml
 
+from .paths import resource_path
+
 
 DEFAULT_CONFIG_PATH = Path("config.yaml")
 
@@ -43,7 +45,7 @@ class AppConfig:
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH) -> AppConfig:
-    config_path = Path(path)
+    config_path = resource_path(path)
     with config_path.open("r", encoding="utf-8") as file:
         data = yaml.safe_load(file) or {}
     if not data.get("portal_url"):
