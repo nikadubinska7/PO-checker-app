@@ -31,6 +31,9 @@ debug:
 
 selectors:
   po_input:
+    xpaths:
+      - "//*[normalize-space(.)='P.O.']/following::input[1]"
+      - "//*[normalize-space(.)='P.O']/following::input[1]"
     labels:
       - "P.O."
       - "P.O"
@@ -43,6 +46,8 @@ selectors:
       - "input[placeholder*='PO' i]"
 
   refresh_button:
+    xpaths:
+      - "//*[normalize-space(.)='Refresh']"
     roles:
       - role: "button"
         name: "Refresh"
@@ -53,6 +58,9 @@ selectors:
       - "input[type='button'][value*='Refresh' i]"
 
   labels_checkbox:
+    xpaths:
+      - "(//*[normalize-space(.)='{{PO}}']/ancestor::tr[1]//input[@type='checkbox'])[2]"
+      - "//*[normalize-space(.)='{{PO}}']/ancestor::tr[1]//input[@type='checkbox'][last()]"
     css:
       - "tr:has-text('{{PO}}') input[type='checkbox']"
       - "td:has-text('Labels') input[type='checkbox']"
@@ -60,6 +68,9 @@ selectors:
       - "input[type='checkbox'][id*='label' i]"
 
   request_labels_button:
+    xpaths:
+      - "//*[normalize-space(.)='Request labels']"
+      - "//*[normalize-space(.)='Request Labels']"
     roles:
       - role: "button"
         name: "Request labels"
@@ -73,11 +84,14 @@ selectors:
       - "input[type='button'][value*='Request labels' i]"
 
   status_cells:
-    css:
-      - "tr:has-text('{{PO}}') td"
-      - "td:has-text('available')"
+    xpaths:
+      - "//*[normalize-space(.)='{{PO}}']/ancestor::tr[1]/td[11]"
 
   printer_dropdown:
+    xpaths:
+      - "//*[normalize-space(.)='Select printing station']/following::select[1]"
+      - "//*[normalize-space(.)='Factory']/following::select[1]"
+      - "//*[normalize-space(.)='Printer']/following::select[1]"
     labels:
       - "Factory"
       - "Printer"
@@ -92,6 +106,8 @@ selectors:
       - "[role='combobox']"
 
   final_request_button:
+    xpaths:
+      - "//*[normalize-space(.)='Request']"
     roles:
       - role: "button"
         name: "Request"
@@ -102,6 +118,9 @@ selectors:
       - "input[type='button'][value='Request']"
 
   ok_button:
+    xpaths:
+      - "//*[normalize-space(.)='OK']"
+      - "//*[normalize-space(.)='Ok']"
     roles:
       - role: "button"
         name: "OK"

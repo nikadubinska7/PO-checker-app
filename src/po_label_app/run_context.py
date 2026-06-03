@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .paths import default_runs_dir
+from .paths import default_runs_dir, default_screenshot_dir
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,7 @@ def create_run_context(base_dir: str | Path | None = None) -> RunContext:
         if not run_dir.exists():
             break
         index += 1
-    screenshot_dir = run_dir / "screenshots"
+    screenshot_dir = default_screenshot_dir() or run_dir / "screenshots"
     log_dir = run_dir / "logs"
     screenshot_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)

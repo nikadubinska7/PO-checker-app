@@ -50,8 +50,24 @@ def default_runs_dir() -> Path:
     return path
 
 
+def default_screenshot_dir() -> Path | None:
+    if platform.system().lower() != "darwin":
+        return None
+    path = Path(
+        "/Users/ni4ka/Desktop/DESKTOP1/DESKTOP/IGROW/AI LEARNING/NIKE/PO checker app/screens"
+    )
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def default_tracking_path() -> Path:
     return app_data_dir() / "tracking.xlsx"
+
+
+def default_browser_profile_dir() -> Path:
+    path = app_data_dir() / "browser-profile"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def bundled_playwright_browsers_dir() -> Path | None:
