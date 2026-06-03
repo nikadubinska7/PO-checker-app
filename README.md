@@ -89,7 +89,15 @@ Then download:
 
 For Windows, extract the ZIP and double-click `PO Label Request App.exe`.
 
-For macOS, extract the ZIP and keep the whole extracted folder together. Open `PO Label Request App.app` from inside that folder. The folder also contains bundled Playwright browser files that the app needs.
+For macOS, extract the ZIP and open `PO Label Request App.app`.
+
+If macOS blocks the app because it was downloaded from the internet, remove quarantine on the extracted folder:
+
+```bash
+xattr -cr ~/Downloads/PO\ Label\ Request\ App\ macOS
+```
+
+Then right-click `PO Label Request App.app` and choose **Open**.
 
 ## Building Double-Click Desktop Packages
 

@@ -85,23 +85,32 @@ def main() -> None:
 def copy_browser_files(browser_dir: Path) -> None:
     system = platform.system().lower()
     if system == "darwin":
-        package_dir = ROOT / "dist" / f"{APP_NAME} macOS"
         app_source = ROOT / "dist" / f"{APP_NAME}.app"
+        target = app_source / "Contents" / "Resources" / "ms-playwright"
+        copy_tree(browser_dir, target)
+        subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_source)], check=True)
+
+        package_dir = ROOT / "dist" / f"{APP_NAME} macOS"
         app_target = package_dir / f"{APP_NAME}.app"
         if package_dir.exists():
             shutil.rmtree(package_dir)
         package_dir.mkdir(parents=True, exist_ok=True)
         shutil.copytree(app_source, app_target, symlinks=True)
-        target = package_dir / "ms-playwright"
+        print(f"Copied signed macOS app package to: {package_dir}")
+        return
     elif system == "windows":
         target = ROOT / "dist" / APP_NAME / "ms-playwright"
     else:
         target = ROOT / "dist" / APP_NAME / "ms-playwright"
 
+    copy_tree(browser_dir, target)
+
+
+def copy_tree(source: Path, target: Path) -> None:
     if target.exists():
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(browser_dir, target)
+    shutil.copytree(source, target)
     print(f"Copied Playwright browsers to: {target}")
 
 
