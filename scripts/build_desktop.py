@@ -85,7 +85,14 @@ def main() -> None:
 def copy_browser_files(browser_dir: Path) -> None:
     system = platform.system().lower()
     if system == "darwin":
-        target = ROOT / "dist" / f"{APP_NAME}.app" / "Contents" / "Resources" / "ms-playwright"
+        package_dir = ROOT / "dist" / f"{APP_NAME} macOS"
+        app_source = ROOT / "dist" / f"{APP_NAME}.app"
+        app_target = package_dir / f"{APP_NAME}.app"
+        if package_dir.exists():
+            shutil.rmtree(package_dir)
+        package_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(app_source, app_target, symlinks=True)
+        target = package_dir / "ms-playwright"
     elif system == "windows":
         target = ROOT / "dist" / APP_NAME / "ms-playwright"
     else:

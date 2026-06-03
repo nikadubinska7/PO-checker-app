@@ -89,7 +89,7 @@ Then download:
 
 For Windows, extract the ZIP and double-click `PO Label Request App.exe`.
 
-For macOS, extract the ZIP and open `PO Label Request App.app`.
+For macOS, extract the ZIP and keep the whole extracted folder together. Open `PO Label Request App.app` from inside that folder. The folder also contains bundled Playwright browser files that the app needs.
 
 ## Building Double-Click Desktop Packages
 
@@ -108,7 +108,7 @@ python scripts/create_example_input.py
 python scripts/build_desktop.py
 ```
 
-The app will be created under `dist/PO Label Request App.app`.
+The app package folder will be created under `dist/PO Label Request App macOS`.
 
 ### Build Windows `.exe`
 

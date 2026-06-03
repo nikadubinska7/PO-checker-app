@@ -61,6 +61,9 @@ def bundled_playwright_browsers_dir() -> Path | None:
         Path(sys.executable).parent.parent / "Resources" / "ms-playwright",
         Path(sys.executable).parent.parent / "Frameworks" / "ms-playwright",
     ]
+    executable_path = Path(sys.executable)
+    if len(executable_path.parents) > 3:
+        candidates.append(executable_path.parents[3] / "ms-playwright")
     for candidate in candidates:
         if candidate.exists():
             return candidate

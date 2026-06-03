@@ -21,10 +21,12 @@ jobs:
             runner: macos-14
             artifact-name: PO-Label-Request-App-macOS
             package-path: PO-Label-Request-App-macOS.zip
+            package-folder: dist/PO Label Request App macOS
           - os-name: windows
             runner: windows-latest
             artifact-name: PO-Label-Request-App-Windows
             package-path: PO-Label-Request-App-Windows.zip
+            package-folder: dist/PO Label Request App
 
     steps:
       - name: Check out repository
@@ -53,12 +55,12 @@ jobs:
 
       - name: Zip macOS app
         if: matrix.os-name == 'macos'
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/PO Label Request App.app" "${{ matrix.package-path }}"
+        run: ditto -c -k --sequesterRsrc --keepParent "${{ matrix.package-folder }}" "${{ matrix.package-path }}"
 
       - name: Zip Windows app
         if: matrix.os-name == 'windows'
         shell: pwsh
-        run: Compress-Archive -Path "dist\PO Label Request App" -DestinationPath "${{ matrix.package-path }}" -Force
+        run: Compress-Archive -Path "${{ matrix.package-folder }}" -DestinationPath "${{ matrix.package-path }}" -Force
 
       - name: Upload zipped package
         uses: actions/upload-artifact@v4
