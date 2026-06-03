@@ -16,7 +16,9 @@ The app uses a visible Playwright browser. Login is manual: click **Open Portal*
 
 ## For Business Users
 
-Use the packaged app when available. Download the package for your laptop from the GitHub Actions build artifacts or a release:
+Use the packaged app when available. Download the package for your laptop from the GitHub Releases page:
+
+`https://github.com/nikadubinska7/PO-checker-app/releases/tag/latest-desktop-build`
 
 - macOS: open `PO Label Request App.app`.
 - Windows: open `PO Label Request App.exe`.
@@ -74,6 +76,21 @@ python -m po_label_app
 8. Navigate to the correct portal page if the portal does not open there directly.
 9. Click **Start Processing**.
 
+## Downloading The Install Package
+
+Open:
+
+`https://github.com/nikadubinska7/PO-checker-app/releases/tag/latest-desktop-build`
+
+Then download:
+
+- Windows: `PO-Label-Request-App-Windows.zip`
+- macOS: `PO-Label-Request-App-macOS.zip`
+
+For Windows, extract the ZIP and double-click `PO Label Request App.exe`.
+
+For macOS, extract the ZIP and open `PO Label Request App.app`.
+
 ## Building Double-Click Desktop Packages
 
 Build packages on the same operating system you want to distribute to. Build the macOS app on a Mac. Build the Windows app on Windows.
@@ -122,7 +139,9 @@ To build both packages without using terminal on the target laptops:
 2. Go to **Actions**.
 3. Select **Build desktop packages**.
 4. Click **Run workflow**.
-5. Download the macOS or Windows artifact after the workflow finishes.
+5. After the workflow finishes, go to **Releases**.
+6. Open **Latest Desktop Build**.
+7. Download the macOS or Windows ZIP package.
 
 ### Installer Notes
 

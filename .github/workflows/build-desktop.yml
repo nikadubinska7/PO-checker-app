@@ -6,6 +6,9 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build ${{ matrix.os-name }}
@@ -17,11 +20,11 @@ jobs:
           - os-name: macos
             runner: macos-14
             artifact-name: PO-Label-Request-App-macOS
-            artifact-path: dist/PO Label Request App.app
+            package-path: PO-Label-Request-App-macOS.zip
           - os-name: windows
             runner: windows-latest
             artifact-name: PO-Label-Request-App-Windows
-            artifact-path: dist/PO Label Request App
+            package-path: PO-Label-Request-App-Windows.zip
 
     steps:
       - name: Check out repository
@@ -48,9 +51,47 @@ jobs:
       - name: Build desktop package
         run: python scripts/build_desktop.py
 
-      - name: Upload package
+      - name: Zip macOS app
+        if: matrix.os-name == 'macos'
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/PO Label Request App.app" "${{ matrix.package-path }}"
+
+      - name: Zip Windows app
+        if: matrix.os-name == 'windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist\PO Label Request App" -DestinationPath "${{ matrix.package-path }}" -Force
+
+      - name: Upload zipped package
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.artifact-path }}
+          path: ${{ matrix.package-path }}
           if-no-files-found: error
+
+  release:
+    name: Publish latest desktop release
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest-desktop-build
+          name: Latest Desktop Build
+          body: |
+            Download the correct package for your operating system.
+
+            Windows: PO-Label-Request-App-Windows.zip
+            macOS: PO-Label-Request-App-macOS.zip
+          artifacts: release-assets/*.zip
+          allowUpdates: true
+          replacesArtifacts: true
+          removeArtifacts: true
+          artifactErrorsFailBuild: true
