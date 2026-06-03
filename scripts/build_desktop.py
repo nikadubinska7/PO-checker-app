@@ -75,7 +75,7 @@ def main() -> None:
         "playwright.sync_api",
         "--collect-all",
         "playwright",
-        str(ROOT / "src" / "po_label_app" / "__main__.py"),
+        str(ROOT / "scripts" / "desktop_entry.py"),
     ]
     subprocess.run(command, cwd=ROOT, check=True)
     copy_browser_files(browser_dir)
