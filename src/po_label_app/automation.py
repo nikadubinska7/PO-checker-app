@@ -435,6 +435,7 @@ class PortalAutomation:
 
             for (const table of document.querySelectorAll('table')) {
                 const rows = Array.from(table.querySelectorAll('tr'));
+                const tableContainsPo = normalize(table.innerText || '').includes(po);
                 let headerRowIndex = -1;
                 let poIndex = -1;
                 let selectIndex = -1;
@@ -465,22 +466,28 @@ class PortalAutomation:
                 if (headerRowIndex < 0) {
                     continue;
                 }
+                if (!tableContainsPo) {
+                    continue;
+                }
 
                 for (const row of rows.slice(headerRowIndex + 1)) {
                     const cells = directCells(row);
                     const texts = cells.map(cell => cellText(cell));
-                    if (texts.length <= Math.max(poIndex, selectIndex, labelTypeIndex, statusIndex)) {
+                    if (texts.length <= selectIndex) {
                         continue;
                     }
-                    const poCell = texts[poIndex] || '';
-                    if (!poCell.includes(po) && !texts.some(text => text.includes(po))) {
-                        continue;
-                    }
-                    const labelType = (texts[labelTypeIndex] || '').toUpperCase();
+                    const indexedLabelType = (texts[labelTypeIndex] || '').toUpperCase();
+                    const fallbackLabelType = texts
+                        .map(text => text.toUpperCase())
+                        .find(text => labelTypes.has(text));
+                    const labelType = labelTypes.has(indexedLabelType) ? indexedLabelType : fallbackLabelType;
                     if (!labelTypes.has(labelType)) {
                         continue;
                     }
-                    const status = texts[statusIndex] || '';
+                    const status = texts[statusIndex]
+                        || texts.find(text => canonical(text).includes(availableText))
+                        || texts.find(text => ['requested', 'printed'].some(statusText => canonical(text).includes(statusText)))
+                        || '';
                     const checkbox = cells[selectIndex]?.querySelector("input[type='checkbox']")
                         || row.querySelector("input[type='checkbox']");
                     const isAvailable = canonical(status).includes(availableText);
@@ -498,6 +505,9 @@ class PortalAutomation:
                     setChecked(checkbox, shouldSelect, labelType);
                     if (shouldSelect && checkbox && checkbox.checked) {
                         result.selectedCount += 1;
+                    }
+                    if (!shouldSelect && checkbox && checkbox.checked) {
+                        result.blocked.push(`${labelType}: non-PRICE checkbox remained selected`);
                     }
                 }
             }
@@ -728,6 +738,8 @@ class PortalAutomation:
         contexts: list[Page | Frame] = [page]
         for frame in page.frames:
             try:
+                if frame == page.main_frame:
+                    continue
                 if not frame.is_detached():
                     contexts.append(frame)
             except PlaywrightError:
