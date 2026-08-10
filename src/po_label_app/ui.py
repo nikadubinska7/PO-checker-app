@@ -6,10 +6,18 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .config import load_config
+from .models import LABEL_MODE_ALL_AVAILABLE, LABEL_MODE_PRICE_ONLY
 from .paths import default_tracking_path
 from .run_context import configure_logging, create_run_context
 from .tracking import ensure_tracking_path
 from .worker import PortalWorker, WorkerEvent
+
+
+LABEL_MODE_DISPLAY = {
+    "All available labels": LABEL_MODE_ALL_AVAILABLE,
+    "PRICE labels only": LABEL_MODE_PRICE_ONLY,
+}
+LABEL_MODE_BY_VALUE = {value: label for label, value in LABEL_MODE_DISPLAY.items()}
 
 
 class LabelRequestApp(tk.Tk):
@@ -27,6 +35,7 @@ class LabelRequestApp(tk.Tk):
         self.input_path = tk.StringVar()
         self.tracking_path = tk.StringVar(value=str(default_tracking_path()))
         self.dry_run = tk.BooleanVar(value=True)
+        self.label_request_mode_display = tk.StringVar(value=LABEL_MODE_BY_VALUE[LABEL_MODE_ALL_AVAILABLE])
         self.progress = tk.StringVar(value="0 / 0")
         self.current_po = tk.StringVar(value="-")
         self.status_text = tk.StringVar(value="Open the portal, log in manually, then start processing.")
@@ -55,9 +64,9 @@ class LabelRequestApp(tk.Tk):
 
         controls = ttk.Frame(self)
         controls.grid(row=1, column=0, sticky="ew", padx=12, pady=6)
-        for index in range(8):
+        for index in range(9):
             controls.columnconfigure(index, weight=0)
-        controls.columnconfigure(8, weight=1)
+        controls.columnconfigure(9, weight=1)
 
         ttk.Button(controls, text="Open Portal", command=self._open_portal).grid(row=0, column=0, padx=(0, 8))
         ttk.Button(controls, text="Start Processing", command=self._start_processing).grid(row=0, column=1, padx=8)
@@ -65,6 +74,14 @@ class LabelRequestApp(tk.Tk):
         ttk.Button(controls, text="Resume", command=self.worker.resume).grid(row=0, column=3, padx=8)
         ttk.Button(controls, text="Stop", command=self.worker.stop_processing).grid(row=0, column=4, padx=8)
         ttk.Checkbutton(controls, text="Dry Run", variable=self.dry_run).grid(row=0, column=5, padx=16)
+        ttk.Label(controls, text="Label Mode").grid(row=0, column=6, padx=(8, 4))
+        ttk.Combobox(
+            controls,
+            textvariable=self.label_request_mode_display,
+            values=list(LABEL_MODE_DISPLAY),
+            state="readonly",
+            width=20,
+        ).grid(row=0, column=7, padx=(0, 8))
 
         summary = ttk.LabelFrame(self, text="Run Status")
         summary.grid(row=2, column=0, sticky="ew", padx=12, pady=6)
@@ -82,12 +99,13 @@ class LabelRequestApp(tk.Tk):
         table_frame.rowconfigure(0, weight=1)
         table_frame.columnconfigure(0, weight=1)
 
-        columns = ("po", "printer", "status", "explanation", "timestamp", "screenshot")
+        columns = ("po", "printer", "status", "label_mode", "explanation", "timestamp", "screenshot")
         self.result_table = ttk.Treeview(table_frame, columns=columns, show="headings")
         headings = {
             "po": "PO",
             "printer": "Printer",
             "status": "Automation Status",
+            "label_mode": "Label Request Mode",
             "explanation": "Error Explanation",
             "timestamp": "Processed Timestamp",
             "screenshot": "Screenshot Path",
@@ -96,7 +114,8 @@ class LabelRequestApp(tk.Tk):
             "po": 110,
             "printer": 80,
             "status": 150,
-            "explanation": 310,
+            "label_mode": 140,
+            "explanation": 280,
             "timestamp": 160,
             "screenshot": 360,
         }
@@ -156,7 +175,14 @@ class LabelRequestApp(tk.Tk):
             self.progress.set("0 / 0")
             self.current_po.set("-")
             self.status_text.set("Starting processing...")
-            self.worker.start_processing(input_path, tracking_path, self.dry_run.get(), run_context)
+            label_request_mode = LABEL_MODE_DISPLAY[self.label_request_mode_display.get()]
+            self.worker.start_processing(
+                input_path,
+                tracking_path,
+                self.dry_run.get(),
+                label_request_mode,
+                run_context,
+            )
         except Exception as exc:
             messagebox.showerror("Cannot start processing", str(exc))
 
@@ -196,6 +222,7 @@ class LabelRequestApp(tk.Tk):
                     result.po,
                     result.printer,
                     result.automation_status,
+                    result.label_request_mode,
                     result.error_explanation,
                     result.processed_timestamp,
                     result.screenshot_path,

@@ -44,6 +44,7 @@ class PortalWorker(threading.Thread):
         input_path: Path,
         tracking_path: Path,
         dry_run: bool,
+        label_request_mode: str,
         run_context: RunContext,
     ) -> None:
         self.commands.put(
@@ -53,6 +54,7 @@ class PortalWorker(threading.Thread):
                     "input_path": input_path,
                     "tracking_path": tracking_path,
                     "dry_run": dry_run,
+                    "label_request_mode": label_request_mode,
                     "run_context": run_context,
                 },
             )
@@ -109,6 +111,7 @@ class PortalWorker(threading.Thread):
         input_path: Path,
         tracking_path: Path,
         dry_run: bool,
+        label_request_mode: str,
         run_context: RunContext,
     ) -> None:
         if not self.automation:
@@ -119,7 +122,7 @@ class PortalWorker(threading.Thread):
         self.pause_event.clear()
 
         tracking = TrackingWorkbook(tracking_path)
-        input_workbook = load_input_workbook(input_path, run_context.run_id)
+        input_workbook = load_input_workbook(input_path, run_context.run_id, label_request_mode)
         requested = tracking.requested_pos()
         pending = []
         skipped: list[ProcessingResult] = list(input_workbook.duplicate_results)
@@ -133,6 +136,7 @@ class PortalWorker(threading.Thread):
                         automation_status=STATUS_SKIPPED,
                         error_explanation="Already requested in previous run",
                         run_id=run_context.run_id,
+                        label_request_mode=label_request_mode,
                     )
                 )
             else:
@@ -165,7 +169,11 @@ class PortalWorker(threading.Thread):
                 break
             self.event_callback(WorkerEvent("current_po", order.po))
             try:
-                result = self.automation.process_order(order, dry_run=dry_run)
+                result = self.automation.process_order(
+                    order,
+                    dry_run=dry_run,
+                    label_request_mode=label_request_mode,
+                )
             except SessionExpiredError as exc:
                 self.pause_event.set()
                 self.event_callback(WorkerEvent("session_expired", str(exc)))
@@ -173,7 +181,11 @@ class PortalWorker(threading.Thread):
                     time.sleep(0.5)
                 if self.stop_event.is_set():
                     break
-                result = self.automation.process_order(order, dry_run=dry_run)
+                result = self.automation.process_order(
+                    order,
+                    dry_run=dry_run,
+                    label_request_mode=label_request_mode,
+                )
             except StopRequestedError:
                 break
 

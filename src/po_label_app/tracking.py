@@ -39,18 +39,23 @@ class TrackingWorkbook:
         return requested
 
     def append_result(self, result: ProcessingResult) -> None:
-        self.sheet.append(
-            [
-                result.po,
-                result.printer,
-                result.automation_status,
-                result.error_explanation,
-                result.processed_date,
-                result.processed_timestamp,
-                result.screenshot_path,
-                result.run_id,
-            ]
-        )
+        row_index = self.sheet.max_row + 1
+        column_map = self._column_map()
+        values = {
+            "PO": result.po,
+            "Printer": result.printer,
+            "Automation Status": result.automation_status,
+            "Label Request Mode": result.label_request_mode,
+            "Error Explanation": result.error_explanation,
+            "Processed Date": result.processed_date,
+            "Processed Timestamp": result.processed_timestamp,
+            "Screenshot Path": result.screenshot_path,
+            "Run ID": result.run_id,
+        }
+        for header, value in values.items():
+            column_index = column_map.get(header)
+            if column_index is not None:
+                self.sheet.cell(row=row_index, column=column_index + 1, value=value)
         self._format_sheet()
         self.save()
 
@@ -85,11 +90,12 @@ class TrackingWorkbook:
             "A": 16,
             "B": 12,
             "C": 20,
-            "D": 42,
-            "E": 16,
-            "F": 22,
-            "G": 60,
-            "H": 28,
+            "D": 22,
+            "E": 42,
+            "F": 16,
+            "G": 22,
+            "H": 60,
+            "I": 28,
         }
         for column, width in widths.items():
             self.sheet.column_dimensions[column].width = width

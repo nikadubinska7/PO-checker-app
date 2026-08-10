@@ -5,7 +5,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from .models import ProcessingResult, PurchaseOrder, STATUS_SKIPPED
+from .models import LABEL_MODE_ALL_AVAILABLE, ProcessingResult, PurchaseOrder, STATUS_SKIPPED
 
 
 REQUIRED_COLUMNS = {"PO", "Printer"}
@@ -13,6 +13,7 @@ TRACKING_COLUMNS = [
     "PO",
     "Printer",
     "Automation Status",
+    "Label Request Mode",
     "Error Explanation",
     "Processed Date",
     "Processed Timestamp",
@@ -37,7 +38,11 @@ def _normalize_cell(value: object) -> str:
     return str(value).strip()
 
 
-def load_input_workbook(path: str | Path, run_id: str) -> InputWorkbook:
+def load_input_workbook(
+    path: str | Path,
+    run_id: str,
+    label_request_mode: str = LABEL_MODE_ALL_AVAILABLE,
+) -> InputWorkbook:
     workbook_path = Path(path)
     if not workbook_path.exists():
         raise FileNotFoundError(f"Input Excel file does not exist: {workbook_path}")
@@ -69,6 +74,7 @@ def load_input_workbook(path: str | Path, run_id: str) -> InputWorkbook:
                     automation_status=STATUS_SKIPPED,
                     error_explanation="Duplicate PO in input run; first occurrence processed",
                     run_id=run_id,
+                    label_request_mode=label_request_mode,
                 )
             )
             continue

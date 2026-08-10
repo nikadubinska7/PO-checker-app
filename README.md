@@ -184,6 +184,7 @@ The tracking workbook contains:
 - `PO`
 - `Printer`
 - `Automation Status`
+- `Label Request Mode`
 - `Error Explanation`
 - `Processed Date`
 - `Processed Timestamp`
@@ -198,6 +199,11 @@ Statuses:
 - `dry_run_success`
 
 If a previous tracking row has the same PO with `Automation Status = requested`, the app writes a new `skipped` row with `Already requested in previous run`.
+
+`Label Request Mode` records how the PO was processed:
+
+- `all_available` requests all labels selected by the portal workflow.
+- `price_only` selects only available `PRICE` label rows before clicking Request.
 
 ## Printer Mapping
 
@@ -219,6 +225,15 @@ The portal HTML may require adjustment after live inspection. Prefer adding stab
 ## Dry-Run Mode
 
 Dry-run mode executes each PO up to the final Request button and does not click it. Successful dry-runs are written as `dry_run_success` and include a screenshot of the final state.
+
+## Label Mode
+
+Use the `Label Mode` dropdown in the app before starting a run:
+
+- `All available labels` keeps the existing behavior.
+- `PRICE labels only` requests only rows where `Label Type = PRICE` and `Status = available`.
+
+If `PRICE labels only` is selected and the PO has no available PRICE row, the PO is written as `error` with a screenshot.
 
 ## Mock Excel Check
 

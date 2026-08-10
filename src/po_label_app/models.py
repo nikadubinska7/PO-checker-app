@@ -10,6 +10,9 @@ STATUS_ERROR = "error"
 STATUS_SKIPPED = "skipped"
 STATUS_DRY_RUN_SUCCESS = "dry_run_success"
 
+LABEL_MODE_ALL_AVAILABLE = "all_available"
+LABEL_MODE_PRICE_ONLY = "price_only"
+
 
 @dataclass(frozen=True)
 class PurchaseOrder:
@@ -28,6 +31,7 @@ class ProcessingResult:
     processed_timestamp: str
     screenshot_path: str
     run_id: str
+    label_request_mode: str
 
     @classmethod
     def create(
@@ -38,6 +42,7 @@ class ProcessingResult:
         error_explanation: str,
         run_id: str,
         screenshot_path: Optional[Path] = None,
+        label_request_mode: str = LABEL_MODE_ALL_AVAILABLE,
     ) -> "ProcessingResult":
         from datetime import datetime
 
@@ -51,4 +56,5 @@ class ProcessingResult:
             processed_timestamp=now.strftime("%Y-%m-%d %H:%M:%S"),
             screenshot_path=str(screenshot_path) if screenshot_path else "",
             run_id=run_id,
+            label_request_mode=label_request_mode,
         )

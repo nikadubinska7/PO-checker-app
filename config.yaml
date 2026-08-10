@@ -2,6 +2,7 @@ portal_url: "https://vendor.deichmann.com/vendor.portal.web/"
 
 texts:
   success_popup: "Labels requested successfully."
+  no_labels_popup: "You did not select any labels."
   available_status: "available"
   found_indicator: "Order/s found"
   zero_orders_indicator: "0 Order/s found"

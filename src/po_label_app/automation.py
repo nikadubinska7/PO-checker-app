@@ -6,6 +6,7 @@ import random
 import re
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -14,11 +15,14 @@ from playwright.sync_api import Frame, Locator, Page, TimeoutError as Playwright
 
 from .config import AppConfig
 from .models import (
+    LABEL_MODE_ALL_AVAILABLE,
+    LABEL_MODE_PRICE_ONLY,
     ProcessingResult,
     PurchaseOrder,
     STATUS_DRY_RUN_SUCCESS,
     STATUS_ERROR,
     STATUS_REQUESTED,
+    STATUS_SKIPPED,
 )
 from .run_context import RunContext
 from .paths import bundled_playwright_browsers_dir, default_browser_profile_dir
@@ -33,6 +37,13 @@ class SessionExpiredError(RuntimeError):
 
 class StopRequestedError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class LabelSelectionResult:
+    status_text: str
+    selected_count: int
+    skip_explanation: str = ""
 
 
 class PortalAutomation:
@@ -83,7 +94,12 @@ class PortalAutomation:
             except PlaywrightError:
                 LOGGER.exception("Failed to stop Playwright")
 
-    def process_order(self, order: PurchaseOrder, dry_run: bool) -> ProcessingResult:
+    def process_order(
+        self,
+        order: PurchaseOrder,
+        dry_run: bool,
+        label_request_mode: str = LABEL_MODE_ALL_AVAILABLE,
+    ) -> ProcessingResult:
         if not self.page:
             raise RuntimeError("Portal browser is not open")
 
@@ -105,14 +121,29 @@ class PortalAutomation:
                     error_explanation="PO not found",
                     run_id=self.run_context.run_id,
                     screenshot_path=screenshot,
+                    label_request_mode=label_request_mode,
                 )
 
             self._check_labels_checkbox(order.po)
             self._click_configured("request_labels_button")
             self._load_delay()
-            status_text = self._extract_status_text(order.po)
+            label_selection: Optional[LabelSelectionResult] = None
+            if label_request_mode == LABEL_MODE_PRICE_ONLY:
+                label_selection = self._select_price_only_labels(order.po)
+                status_text = label_selection.status_text
+            else:
+                status_text = self._extract_status_text(order.po)
             available_text = str(self.config.texts.get("available_status", "available")).strip().lower()
             if available_text not in status_text.lower():
+                if label_selection and label_selection.skip_explanation:
+                    return ProcessingResult.create(
+                        po=order.po,
+                        printer=order.printer,
+                        automation_status=STATUS_SKIPPED,
+                        error_explanation=label_selection.skip_explanation,
+                        run_id=self.run_context.run_id,
+                        label_request_mode=label_request_mode,
+                    )
                 screenshot = self._screenshot(order.po, "error")
                 return ProcessingResult.create(
                     po=order.po,
@@ -121,6 +152,18 @@ class PortalAutomation:
                     error_explanation=status_text or "Status is not available",
                     run_id=self.run_context.run_id,
                     screenshot_path=screenshot,
+                    label_request_mode=label_request_mode,
+                )
+            if label_selection and label_selection.selected_count < 1:
+                screenshot = self._screenshot(order.po, "error")
+                return ProcessingResult.create(
+                    po=order.po,
+                    printer=order.printer,
+                    automation_status=STATUS_ERROR,
+                    error_explanation="No PRICE label checkbox was selected",
+                    run_id=self.run_context.run_id,
+                    screenshot_path=screenshot,
+                    label_request_mode=label_request_mode,
                 )
 
             self._select_printer(order.printer)
@@ -130,9 +173,13 @@ class PortalAutomation:
                     po=order.po,
                     printer=order.printer,
                     automation_status=STATUS_DRY_RUN_SUCCESS,
-                    error_explanation="Dry run reached final Request step; Request was not clicked",
+                    error_explanation=(
+                        "Dry run reached final Request step; Request was not clicked; "
+                        f"label mode: {label_request_mode}"
+                    ),
                     run_id=self.run_context.run_id,
                     screenshot_path=screenshot,
+                    label_request_mode=label_request_mode,
                 )
 
             self._click_configured("final_request_button")
@@ -144,9 +191,12 @@ class PortalAutomation:
                 po=order.po,
                 printer=order.printer,
                 automation_status=STATUS_REQUESTED,
-                error_explanation="",
+                error_explanation=(
+                    "Requested PRICE label only" if label_request_mode == LABEL_MODE_PRICE_ONLY else ""
+                ),
                 run_id=self.run_context.run_id,
                 screenshot_path=screenshot,
+                label_request_mode=label_request_mode,
             )
         except SessionExpiredError:
             raise
@@ -162,6 +212,7 @@ class PortalAutomation:
                 error_explanation=str(exc),
                 run_id=self.run_context.run_id,
                 screenshot_path=screenshot,
+                label_request_mode=label_request_mode,
             )
 
     def _fill_po(self, po: str) -> None:
@@ -320,6 +371,196 @@ class PortalAutomation:
                 statuses.extend(str(status).strip() for status in found if str(status).strip())
         return self._combine_status_lines(statuses) if statuses else ""
 
+    def _select_price_only_labels(self, po: str) -> LabelSelectionResult:
+        available_text = str(self.config.texts.get("available_status", "available")).strip().lower()
+        script = """
+        ({ po, availableText }) => {
+            const normalize = value => (value || '').replace(/\\s+/g, ' ').trim();
+            const cellText = element => {
+                const parts = [];
+                const visit = node => {
+                    if (node.nodeType === Node.TEXT_NODE) {
+                        parts.push(node.textContent || '');
+                        return;
+                    }
+                    if (node.nodeType !== Node.ELEMENT_NODE || node.tagName === 'TABLE') {
+                        return;
+                    }
+                    for (const child of node.childNodes) {
+                        visit(child);
+                    }
+                };
+                for (const child of element.childNodes) {
+                    visit(child);
+                }
+                return normalize(parts.join(' '));
+            };
+            const directCells = row => Array.from(row.children)
+                .filter(child => child.tagName === 'TD' || child.tagName === 'TH');
+            const canonical = value => normalize(value).toLowerCase();
+            const labelTypes = new Set(['PRICE', 'INFO', 'CARTON', 'MASTER-CARTON']);
+            const result = {
+                foundPrice: false,
+                availablePrice: false,
+                selectedCount: 0,
+                priceStatuses: [],
+                blocked: [],
+            };
+
+            const setChecked = (checkbox, checked, labelType) => {
+                if (!checkbox) {
+                    if (checked) {
+                        result.blocked.push(`${labelType}: select checkbox missing`);
+                    }
+                    return;
+                }
+                if (checkbox.disabled && checkbox.checked !== checked) {
+                    result.blocked.push(`${labelType}: select checkbox disabled`);
+                    return;
+                }
+                if (checkbox.checked === checked) {
+                    return;
+                }
+                checkbox.scrollIntoView({ block: 'center', inline: 'center' });
+                checkbox.click();
+                if (checkbox.checked !== checked) {
+                    checkbox.checked = checked;
+                    checkbox.dispatchEvent(new Event('input', { bubbles: true }));
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (checkbox.checked !== checked) {
+                    result.blocked.push(`${labelType}: select checkbox did not change`);
+                }
+            };
+
+            for (const table of document.querySelectorAll('table')) {
+                const rows = Array.from(table.querySelectorAll('tr'));
+                let headerRowIndex = -1;
+                let poIndex = -1;
+                let selectIndex = -1;
+                let labelTypeIndex = -1;
+                let statusIndex = -1;
+
+                for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+                    const headers = directCells(rows[rowIndex]).map(cell => canonical(cellText(cell)));
+                    const possiblePoIndex = headers.findIndex(text => text === 'p.o.' || text === 'p.o' || text === 'po');
+                    const possibleSelectIndex = headers.findIndex(text => text === 'select');
+                    const possibleLabelTypeIndex = headers.findIndex(text => text === 'label type');
+                    const possibleStatusIndex = headers.findIndex(text => text === 'status');
+                    if (
+                        possiblePoIndex >= 0
+                        && possibleSelectIndex >= 0
+                        && possibleLabelTypeIndex >= 0
+                        && possibleStatusIndex >= 0
+                    ) {
+                        headerRowIndex = rowIndex;
+                        poIndex = possiblePoIndex;
+                        selectIndex = possibleSelectIndex;
+                        labelTypeIndex = possibleLabelTypeIndex;
+                        statusIndex = possibleStatusIndex;
+                        break;
+                    }
+                }
+
+                if (headerRowIndex < 0) {
+                    continue;
+                }
+
+                for (const row of rows.slice(headerRowIndex + 1)) {
+                    const cells = directCells(row);
+                    const texts = cells.map(cell => cellText(cell));
+                    if (texts.length <= Math.max(poIndex, selectIndex, labelTypeIndex, statusIndex)) {
+                        continue;
+                    }
+                    const poCell = texts[poIndex] || '';
+                    if (!poCell.includes(po) && !texts.some(text => text.includes(po))) {
+                        continue;
+                    }
+                    const labelType = (texts[labelTypeIndex] || '').toUpperCase();
+                    if (!labelTypes.has(labelType)) {
+                        continue;
+                    }
+                    const status = texts[statusIndex] || '';
+                    const checkbox = cells[selectIndex]?.querySelector("input[type='checkbox']")
+                        || row.querySelector("input[type='checkbox']");
+                    const isAvailable = canonical(status).includes(availableText);
+                    const shouldSelect = labelType === 'PRICE' && isAvailable;
+
+                    if (labelType === 'PRICE') {
+                        result.foundPrice = true;
+                        if (status) {
+                            result.priceStatuses.push(status);
+                        }
+                        if (isAvailable) {
+                            result.availablePrice = true;
+                        }
+                    }
+                    setChecked(checkbox, shouldSelect, labelType);
+                    if (shouldSelect && checkbox && checkbox.checked) {
+                        result.selectedCount += 1;
+                    }
+                }
+            }
+            result.priceStatuses = Array.from(new Set(result.priceStatuses));
+            return result;
+        }
+        """
+
+        selection_results: list[dict[str, Any]] = []
+        for context in self._search_contexts():
+            try:
+                found = context.evaluate(script, {"po": po, "availableText": available_text})
+            except PlaywrightError:
+                continue
+            if isinstance(found, dict):
+                selection_results.append(found)
+
+        if not selection_results:
+            return LabelSelectionResult(status_text="PRICE label row not found", selected_count=0)
+
+        blocked = [
+            str(item)
+            for result in selection_results
+            for item in result.get("blocked", [])
+            if item
+        ]
+        if blocked:
+            raise RuntimeError("Could not select only PRICE label: " + self._combine_status_lines(blocked))
+
+        selected_count = sum(int(result.get("selectedCount") or 0) for result in selection_results)
+        price_statuses = [
+            str(status)
+            for result in selection_results
+            for status in result.get("priceStatuses", [])
+            if status
+        ]
+        has_available_price = any(bool(result.get("availablePrice")) for result in selection_results)
+        has_requested_price = any(STATUS_REQUESTED in status.strip().lower() for status in price_statuses)
+        if has_available_price and selected_count > 0:
+            self._interaction_delay()
+            return LabelSelectionResult(
+                status_text=str(self.config.texts.get("available_status", "available")),
+                selected_count=selected_count,
+            )
+        if has_requested_price:
+            return LabelSelectionResult(
+                status_text=self._combine_status_lines(price_statuses) or STATUS_REQUESTED,
+                selected_count=selected_count,
+                skip_explanation="PRICE label already requested",
+            )
+        if has_available_price:
+            return LabelSelectionResult(
+                status_text="PRICE label is available, but no checkbox was selected",
+                selected_count=selected_count,
+            )
+        if any(bool(result.get("foundPrice")) for result in selection_results):
+            status_text = self._combine_status_lines(price_statuses) or "unknown status"
+            return LabelSelectionResult(
+                status_text="PRICE label is not available: " + status_text,
+                selected_count=selected_count,
+            )
+        return LabelSelectionResult(status_text="PRICE label row not found", selected_count=selected_count)
+
     def _select_printer(self, printer_code: str) -> None:
         target = self.config.printer_target(printer_code)
         try:
@@ -418,9 +659,19 @@ class PortalAutomation:
 
     def _wait_for_success_popup(self) -> None:
         success = str(self.config.texts.get("success_popup", "Labels requested successfully."))
+        no_labels = str(self.config.texts.get("no_labels_popup", "You did not select any labels."))
         timeout = int(self.config.timing.get("success_timeout_ms", 20000))
-        self._first_text_locator(success).wait_for(timeout=timeout)
-        self._click_configured("ok_button")
+        deadline = time.monotonic() + (timeout / 1000)
+        while time.monotonic() < deadline:
+            body_text = self._body_text(timeout=1000)
+            if re.search(re.escape(success), body_text, re.I):
+                self._click_configured("ok_button")
+                return
+            if re.search(re.escape(no_labels), body_text, re.I):
+                self._click_configured("ok_button")
+                raise RuntimeError(no_labels)
+            time.sleep(0.5)
+        raise RuntimeError(f"Request success popup not detected within {timeout}ms")
 
     def _ensure_logged_in(self) -> None:
         if self._looks_like_login_page():
