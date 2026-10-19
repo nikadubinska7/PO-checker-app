@@ -373,7 +373,7 @@ class PortalAutomation:
     def _select_non_carton_labels(self, po: str) -> LabelSelectionResult:
         available_text = str(self.config.texts.get("available_status", "available")).strip().lower()
         script = """
-        ({ po, availableText }) => {
+        ({ po, availableText, applySelection }) => {
             const normalize = value => (value || '').replace(/\\s+/g, ' ').trim();
             const cellText = element => {
                 const parts = [];
@@ -399,6 +399,7 @@ class PortalAutomation:
             const canonical = value => normalize(value).toLowerCase();
             const excludedTypes = new Set(['CARTON', 'MASTER-CARTON']);
             const result = {
+                matchingRows: 0,
                 foundEligible: false,
                 availableEligible: false,
                 selectedCount: 0,
@@ -418,6 +419,10 @@ class PortalAutomation:
                     return;
                 }
                 if (checkbox.checked === checked) {
+                    return;
+                }
+                if (!applySelection) {
+                    result.blocked.push(`${labelType}: checkbox state changed before Request`);
                     return;
                 }
                 checkbox.scrollIntoView({ block: 'center', inline: 'center' });
@@ -492,6 +497,7 @@ class PortalAutomation:
                         }
                         continue;
                     }
+                    result.matchingRows += 1;
                     const status = texts[statusIndex] || '';
                     const checkbox = cells[selectIndex]?.querySelector("input[type='checkbox']")
                         || row.querySelector("input[type='checkbox']");
@@ -519,17 +525,9 @@ class PortalAutomation:
         }
         """
 
-        selection_results: list[dict[str, Any]] = []
-        for context in self._search_contexts():
-            try:
-                found = context.evaluate(script, {"po": po, "availableText": available_text})
-            except PlaywrightError as exc:
-                raise RuntimeError(f"Could not read or select label rows: {exc}") from exc
-            if isinstance(found, dict):
-                selection_results.append(found)
-
-        if not selection_results:
-            return LabelSelectionResult(status_text="No eligible label rows found", selected_count=0)
+        # Select and verify in the frame that actually owns the label table.
+        # Portal frames can be replaced while Request labels is loading.
+        selection_results = [self._select_labels_in_active_frame(script, po, available_text)]
 
         blocked = [
             str(item)
@@ -576,6 +574,52 @@ class PortalAutomation:
                 selected_count=selected_count,
             )
         return LabelSelectionResult(status_text="No eligible label rows found", selected_count=selected_count)
+
+    def _select_labels_in_active_frame(
+        self, script: str, po: str, available_text: str
+    ) -> dict[str, Any]:
+        timeout = int(self.config.timing.get("default_timeout_ms", 15000)) / 1000
+        deadline = time.monotonic() + timeout
+        last_transient_error = ""
+        while time.monotonic() < deadline:
+            self._guard_control_state()
+            if self._page().is_closed():
+                raise RuntimeError("Portal browser was closed")
+            for context in self._search_contexts():
+                try:
+                    result = context.evaluate(script, {
+                        "po": po, "availableText": available_text, "applySelection": True,
+                    })
+                    if not isinstance(result, dict) or not result.get("matchingRows"):
+                        continue
+                    # A successful call alone is insufficient: an onchange handler
+                    # may replace the frame during checkbox clicks. Verify the live
+                    # table without changing it and retry discovery if it vanished.
+                    verified = context.evaluate(script, {
+                        "po": po, "availableText": available_text, "applySelection": False,
+                    })
+                    if isinstance(verified, dict) and verified.get("matchingRows"):
+                        return verified
+                except PlaywrightError as exc:
+                    message = str(exc)
+                    if not self._is_frame_navigation_error(message):
+                        raise RuntimeError(f"Could not read or select label rows: {message}") from exc
+                    last_transient_error = message
+                    LOGGER.info("PO %s: portal frame changed; rediscovering label table: %s", po, message)
+                    continue
+            self._ensure_logged_in()
+            time.sleep(0.1)
+        detail = f" Last portal error: {last_transient_error}" if last_transient_error else ""
+        raise RuntimeError(f"Label table did not become stable within {timeout:g} seconds.{detail}")
+
+    @staticmethod
+    def _is_frame_navigation_error(message: str) -> bool:
+        normalized = message.lower()
+        return any(text in normalized for text in (
+            "frame was detached", "frame has been detached", "frame got detached",
+            "execution context was destroyed", "cannot find context with specified id",
+            "most likely because of a navigation",
+        ))
 
     def _select_printer(self, printer_code: str) -> None:
         target = self.config.printer_target(printer_code)

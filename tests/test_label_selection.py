@@ -139,3 +139,76 @@ class LabelSelectionTests(unittest.TestCase):
         result = self.automation._select_non_carton_labels('123')
         self.assertEqual(result.skip_explanation, '')
         self.assertIn('unknown status', result.status_text)
+
+    def test_frame_replacements_during_checkbox_clicks_are_recovered(self):
+        self.page.evaluate('''() => {
+            window.labelRows = [
+                ['PRICE', false], ['INFO', false], ['SOURCE-TAGGED', false],
+                ['CARTON', true], ['MASTER-CARTON', true]
+            ];
+            window.replacements = 0;
+            window.renderLabels = () => {
+                document.querySelector('#labels')?.remove();
+                const frame = document.createElement('iframe');
+                frame.id = 'labels';
+                frame.srcdoc = '<table><tr><th>P.O.</th><th>Select</th><th>Label Type</th><th>Status</th></tr>'
+                    + window.labelRows.map(([label, checked], i) =>
+                        `<tr><td>123 1</td><td><input type="checkbox" ${checked ? 'checked' : ''}
+                         onclick="parent.changeLabel(${i}, this.checked)"></td><td>${label}</td><td>available</td></tr>`
+                      ).join('') + '</table>';
+                document.body.append(frame);
+            };
+            window.changeLabel = (i, checked) => {
+                window.labelRows[i][1] = checked;
+                window.replacements += 1;
+                window.renderLabels();
+            };
+            window.renderLabels();
+        }''')
+        self.page.frame_locator('#labels').locator('input').first.wait_for()
+        result = self.automation._select_non_carton_labels('123')
+        self.assertEqual(result.selected_count, 3)
+        self.assertEqual(self.page.evaluate('labelRows.map(r => r[1])'),
+                         [True, True, True, False, False])
+        self.assertGreater(self.page.evaluate('replacements'), 0)
+
+    def test_detached_unrelated_frame_does_not_fail_valid_label_frame(self):
+        from unittest.mock import Mock
+        from playwright.sync_api import Error
+        self.table([('123', 'PRICE', 'available', '')])
+        detached = Mock()
+        detached.evaluate.side_effect = Error('Frame.evaluate: Frame was detached')
+        with patch.object(self.automation, '_search_contexts', return_value=[detached, self.page]):
+            result = self.automation._select_non_carton_labels('123')
+        self.assertEqual(result.selected_count, 1)
+
+    def test_frames_after_valid_label_frame_are_not_evaluated(self):
+        from unittest.mock import Mock
+        from playwright.sync_api import Error
+        self.table([('123', 'PRICE', 'requested', '')])
+        detached = Mock()
+        detached.evaluate.side_effect = Error('Frame.evaluate: Frame was detached')
+        with patch.object(self.automation, '_search_contexts', return_value=[self.page, detached]):
+            result = self.automation._select_non_carton_labels('123')
+        detached.evaluate.assert_not_called()
+        self.assertEqual(result.skip_explanation, 'released before')
+
+    def test_persistent_frame_replacements_fail_with_specific_timeout(self):
+        from unittest.mock import Mock
+        from playwright.sync_api import Error
+        self.automation.config.data['timing']['default_timeout_ms'] = 20
+        detached = Mock()
+        detached.evaluate.side_effect = Error('Frame.evaluate: Frame was detached')
+        with patch.object(self.automation, '_search_contexts', return_value=[detached]), \
+             patch.object(self.automation, '_ensure_logged_in'):
+            with self.assertRaisesRegex(RuntimeError, 'Label table did not become stable.*Frame was detached'):
+                self.automation._select_non_carton_labels('123')
+
+    def test_real_script_error_is_not_hidden_as_frame_refresh(self):
+        from unittest.mock import Mock
+        from playwright.sync_api import Error
+        bad_frame = Mock()
+        bad_frame.evaluate.side_effect = Error('Frame.evaluate: TypeError: unexpected portal markup')
+        with patch.object(self.automation, '_search_contexts', return_value=[bad_frame]):
+            with self.assertRaisesRegex(RuntimeError, 'TypeError: unexpected portal markup'):
+                self.automation._select_non_carton_labels('123')

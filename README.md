@@ -220,6 +220,8 @@ Matching is case-insensitive and trims spaces.
 
 Selectors and text constants are centralized in `config.yaml`.
 
+The portal may replace its label iframe while loading or selecting checkboxes. Exclusion mode rediscovers that frame and verifies the live checkbox states before proceeding. Detached frames are retried within the configured timeout; persistent failures remain errors with their actual cause.
+
 The portal HTML may require adjustment after live inspection. Prefer adding stable labels, button roles, visible text, or narrow CSS selectors in `config.yaml`. Avoid absolute XPath unless there is no better option.
 
 ## Dry-Run Mode
