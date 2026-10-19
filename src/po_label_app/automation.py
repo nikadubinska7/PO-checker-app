@@ -134,16 +134,17 @@ class PortalAutomation:
             else:
                 status_text = self._extract_status_text(order.po)
             available_text = str(self.config.texts.get("available_status", "available")).strip().lower()
-            if available_text not in status_text.lower():
-                if label_selection and label_selection.skip_explanation:
-                    return ProcessingResult.create(
-                        po=order.po,
-                        printer=order.printer,
-                        automation_status=STATUS_SKIPPED,
-                        error_explanation=label_selection.skip_explanation,
-                        run_id=self.run_context.run_id,
-                        label_request_mode=label_request_mode,
-                    )
+            if label_selection and label_selection.skip_explanation:
+                return ProcessingResult.create(
+                    po=order.po,
+                    printer=order.printer,
+                    automation_status=STATUS_SKIPPED,
+                    error_explanation=label_selection.skip_explanation,
+                    run_id=self.run_context.run_id,
+                    label_request_mode=label_request_mode,
+                )
+            if (status_text.strip().lower() != available_text if label_selection
+                    else available_text not in status_text.lower()):
                 screenshot = self._screenshot(order.po, "error")
                 return ProcessingResult.create(
                     po=order.po,
@@ -432,7 +433,10 @@ class PortalAutomation:
             };
 
             for (const table of document.querySelectorAll('table')) {
-                const rows = Array.from(table.querySelectorAll('tr'));
+                // Legacy portal uses nested layout tables. Never treat descendant
+                // table rows as rows of the surrounding layout table.
+                const rows = Array.from(table.querySelectorAll('tr'))
+                    .filter(row => row.closest('table') === table);
                 const tableContainsPo = normalize(table.innerText || '').includes(po);
                 let headerRowIndex = -1;
                 let poIndex = -1;
@@ -475,17 +479,20 @@ class PortalAutomation:
                         continue;
                     }
                     const rowPo = texts[poIndex] || '';
-                    if (rowPo && rowPo !== po) {
+                    // The portal appends the order line: e.g. '5994890 1'.
+                    const orderNumber = rowPo.split(/\\s+/)[0];
+                    if (rowPo && orderNumber !== po) {
                         continue;
                     }
                     const labelType = (texts[labelTypeIndex] || '').toUpperCase();
                     if (!labelType) {
-                        throw new Error('Label type missing; cannot safely exclude cartons');
+                        // Ignore summary/spacer rows; selectable unknown rows must block.
+                        if (row.querySelector("input[type='checkbox']")) {
+                            result.blocked.push('Selectable row has no label type');
+                        }
+                        continue;
                     }
-                    const status = texts[statusIndex]
-                        || texts.find(text => canonical(text).includes(availableText))
-                        || texts.find(text => ['requested', 'printed'].some(statusText => canonical(text).includes(statusText)))
-                        || '';
+                    const status = texts[statusIndex] || '';
                     const checkbox = cells[selectIndex]?.querySelector("input[type='checkbox']")
                         || row.querySelector("input[type='checkbox']");
                     const isAvailable = canonical(status) === availableText;
@@ -493,9 +500,7 @@ class PortalAutomation:
 
                     if (!excludedTypes.has(labelType)) {
                         result.foundEligible = true;
-                        if (status) {
-                            result.eligibleStatuses.push(status);
-                        }
+                        result.eligibleStatuses.push(status || 'unknown status');
                         if (isAvailable) {
                             result.availableEligible = true;
                         }
@@ -519,7 +524,7 @@ class PortalAutomation:
             try:
                 found = context.evaluate(script, {"po": po, "availableText": available_text})
             except PlaywrightError as exc:
-                raise RuntimeError("Could not verify label selection") from exc
+                raise RuntimeError(f"Could not read or select label rows: {exc}") from exc
             if isinstance(found, dict):
                 selection_results.append(found)
 
@@ -543,18 +548,21 @@ class PortalAutomation:
             if status
         ]
         has_available_eligible = any(bool(result.get("availableEligible")) for result in selection_results)
-        has_requested_eligible = any(STATUS_REQUESTED in status.strip().lower() for status in eligible_statuses)
+        released_statuses = {"requested", "released", "printed", "labels requested", "already requested"}
+        all_released = bool(eligible_statuses) and all(
+            status.strip().lower() in released_statuses for status in eligible_statuses
+        )
         if has_available_eligible and selected_count > 0:
             self._interaction_delay()
             return LabelSelectionResult(
                 status_text=str(self.config.texts.get("available_status", "available")),
                 selected_count=selected_count,
             )
-        if has_requested_eligible:
+        if all_released:
             return LabelSelectionResult(
                 status_text=self._combine_status_lines(eligible_statuses) or STATUS_REQUESTED,
                 selected_count=selected_count,
-                skip_explanation="Eligible labels already requested",
+                skip_explanation="released before",
             )
         if has_available_eligible:
             return LabelSelectionResult(

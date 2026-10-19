@@ -11,7 +11,7 @@ from typing import Callable, Optional
 from .automation import PortalAutomation, SessionExpiredError, StopRequestedError
 from .config import AppConfig
 from .excel_io import load_input_workbook
-from .models import ProcessingResult, STATUS_SKIPPED
+from .models import LABEL_MODE_EXCLUDE_CARTONS, ProcessingResult, STATUS_SKIPPED
 from .run_context import RunContext
 from .tracking import TrackingWorkbook
 
@@ -128,13 +128,15 @@ class PortalWorker(threading.Thread):
         skipped: list[ProcessingResult] = list(input_workbook.duplicate_results)
 
         for order in input_workbook.orders:
-            if order.po in requested:
+            # A previous PO-level success may cover PRICE only. In exclusion
+            # mode, inspect live rows so remaining INFO/SOURCE-TAGGED can run.
+            if order.po in requested and label_request_mode != LABEL_MODE_EXCLUDE_CARTONS:
                 skipped.append(
                     ProcessingResult.create(
                         po=order.po,
                         printer=order.printer,
                         automation_status=STATUS_SKIPPED,
-                        error_explanation="Already requested in previous run",
+                        error_explanation="released before",
                         run_id=run_context.run_id,
                         label_request_mode=label_request_mode,
                     )

@@ -198,7 +198,7 @@ Statuses:
 - `skipped`
 - `dry_run_success`
 
-If a previous tracking row has the same PO with `Automation Status = requested`, the app writes a new `skipped` row with `Already requested in previous run`.
+In All available labels mode, a previous `requested` tracking row skips that PO with explanation `released before`. In All except CARTON / MASTER-CARTON mode, the app checks the current portal rows even when a PO was requested previously, because the earlier request may cover only PRICE. It requests remaining available labels and records `skipped` / `released before` only when all eligible rows are already requested, released, or printed.
 
 `Label Request Mode` records how the PO was processed:
 
@@ -233,7 +233,7 @@ Use the `Label Mode` dropdown in the app before starting a run:
 - `All available labels` keeps the existing behavior.
 - `All except CARTON / MASTER-CARTON` requests every row with `Status = available` except `CARTON` and `MASTER-CARTON`, including other label types such as PRICE and INFO.
 
-The exclusion mode unchecks excluded and unavailable rows before requesting. If no eligible labels are available, it records an error with a screenshot, or skips labels already requested.
+The exclusion mode unchecks excluded and unavailable rows before requesting. If all eligible rows were already released, it records `skipped` with `released before`. Genuine unavailable or unreadable statuses remain errors with screenshots and the actual cause. Available PRICE, INFO, and SOURCE-TAGGED rows are selected together; CARTON and MASTER-CARTON are unchecked.
 
 ## Mock Excel Check
 
