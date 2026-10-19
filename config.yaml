@@ -19,6 +19,8 @@ printer_mapping:
   default: "Hong Kong [20]"
 
 timing:
+  # Scale randomized delays only; portal timeouts remain unchanged.
+  speed_multiplier: 3.0
   interaction_delay_min_seconds: 0.5
   interaction_delay_max_seconds: 2.0
   load_delay_min_seconds: 1.0

@@ -6,7 +6,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from .config import load_config
-from .models import LABEL_MODE_ALL_AVAILABLE, LABEL_MODE_PRICE_ONLY
+from .models import LABEL_MODE_ALL_AVAILABLE, LABEL_MODE_EXCLUDE_CARTONS
 from .paths import default_tracking_path
 from .run_context import configure_logging, create_run_context
 from .tracking import ensure_tracking_path
@@ -15,7 +15,7 @@ from .worker import PortalWorker, WorkerEvent
 
 LABEL_MODE_DISPLAY = {
     "All available labels": LABEL_MODE_ALL_AVAILABLE,
-    "PRICE labels only": LABEL_MODE_PRICE_ONLY,
+    "All except CARTON / MASTER-CARTON": LABEL_MODE_EXCLUDE_CARTONS,
 }
 LABEL_MODE_BY_VALUE = {value: label for label, value in LABEL_MODE_DISPLAY.items()}
 
@@ -74,14 +74,14 @@ class LabelRequestApp(tk.Tk):
         ttk.Button(controls, text="Resume", command=self.worker.resume).grid(row=0, column=3, padx=8)
         ttk.Button(controls, text="Stop", command=self.worker.stop_processing).grid(row=0, column=4, padx=8)
         ttk.Checkbutton(controls, text="Dry Run", variable=self.dry_run).grid(row=0, column=5, padx=16)
-        ttk.Label(controls, text="Label Mode").grid(row=0, column=6, padx=(8, 4))
+        ttk.Label(controls, text="Label Mode").grid(row=1, column=0, sticky="w", pady=(8, 0))
         ttk.Combobox(
             controls,
             textvariable=self.label_request_mode_display,
             values=list(LABEL_MODE_DISPLAY),
             state="readonly",
-            width=20,
-        ).grid(row=0, column=7, padx=(0, 8))
+            width=36,
+        ).grid(row=1, column=1, columnspan=4, sticky="w", pady=(8, 0))
 
         summary = ttk.LabelFrame(self, text="Run Status")
         summary.grid(row=2, column=0, sticky="ew", padx=12, pady=6)

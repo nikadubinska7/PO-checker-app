@@ -11,7 +11,7 @@ STATUS_SKIPPED = "skipped"
 STATUS_DRY_RUN_SUCCESS = "dry_run_success"
 
 LABEL_MODE_ALL_AVAILABLE = "all_available"
-LABEL_MODE_PRICE_ONLY = "price_only"
+LABEL_MODE_EXCLUDE_CARTONS = "exclude_cartons"
 
 
 @dataclass(frozen=True)

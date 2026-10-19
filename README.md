@@ -203,7 +203,7 @@ If a previous tracking row has the same PO with `Automation Status = requested`,
 `Label Request Mode` records how the PO was processed:
 
 - `all_available` requests all labels selected by the portal workflow.
-- `price_only` selects only available `PRICE` label rows before clicking Request.
+- `exclude_cartons` selects every available label type except `CARTON` and `MASTER-CARTON`. Historical `price_only` rows remain unchanged.
 
 ## Printer Mapping
 
@@ -231,9 +231,9 @@ Dry-run mode executes each PO up to the final Request button and does not click 
 Use the `Label Mode` dropdown in the app before starting a run:
 
 - `All available labels` keeps the existing behavior.
-- `PRICE labels only` requests only rows where `Label Type = PRICE` and `Status = available`.
+- `All except CARTON / MASTER-CARTON` requests every row with `Status = available` except `CARTON` and `MASTER-CARTON`, including other label types such as PRICE and INFO.
 
-If `PRICE labels only` is selected and the PO has no available PRICE row, the PO is written as `error` with a screenshot.
+The exclusion mode unchecks excluded and unavailable rows before requesting. If no eligible labels are available, it records an error with a screenshot, or skips labels already requested.
 
 ## Mock Excel Check
 
@@ -254,3 +254,9 @@ python -m unittest discover -s tests
 - Do not store portal credentials in this app.
 - Browser automation runs through Playwright DOM APIs, not `pyautogui`.
 - If the portal session expires, the app pauses and asks you to log in again before resuming.
+
+## Speed and rollback
+
+`timing.speed_multiplier` defaults to `3.0`: randomized interaction and loading delays take one-third of their previous time. Set it to `1.0` for the original delays. Portal readiness and success timeouts remain unchanged; actual batch speed depends on portal response times.
+
+The pre-revision source and existing desktop builds are preserved in `backups/pre_revision_2026-10-19/`. To restore, close the app and extract `source.tar.gz` into a separate folder, then follow the setup instructions there. The archive includes the original configuration and local source changes. The original packaged apps can be opened directly from that backup's `dist` folder. Keep using the same tracking workbook to preserve request history. This backup is local and is not included in Git or distributed builds.

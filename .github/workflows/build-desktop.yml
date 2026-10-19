@@ -47,6 +47,9 @@ jobs:
       - name: Install Playwright Chromium
         run: python -m playwright install chromium
 
+      - name: Test Excel tracking, label selection, and dry-run protection
+        run: python -m unittest discover -s tests
+
       - name: Create example workbook
         run: python scripts/create_example_input.py
 
@@ -88,6 +91,10 @@ jobs:
           tag: latest-desktop-build
           name: Latest Desktop Build
           body: |
+            Updated label mode: request all available labels except CARTON and MASTER-CARTON.
+            Randomized delays reduced to one-third; portal wait timeouts remain unchanged.
+            Source commit: ${{ github.sha }}
+
             Download the correct package for your operating system.
 
             Windows: PO-Label-Request-App-Windows.zip

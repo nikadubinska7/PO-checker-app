@@ -16,7 +16,7 @@ from playwright.sync_api import Frame, Locator, Page, TimeoutError as Playwright
 from .config import AppConfig
 from .models import (
     LABEL_MODE_ALL_AVAILABLE,
-    LABEL_MODE_PRICE_ONLY,
+    LABEL_MODE_EXCLUDE_CARTONS,
     ProcessingResult,
     PurchaseOrder,
     STATUS_DRY_RUN_SUCCESS,
@@ -128,8 +128,8 @@ class PortalAutomation:
             self._click_configured("request_labels_button")
             self._load_delay()
             label_selection: Optional[LabelSelectionResult] = None
-            if label_request_mode == LABEL_MODE_PRICE_ONLY:
-                label_selection = self._select_price_only_labels(order.po)
+            if label_request_mode == LABEL_MODE_EXCLUDE_CARTONS:
+                label_selection = self._select_non_carton_labels(order.po)
                 status_text = label_selection.status_text
             else:
                 status_text = self._extract_status_text(order.po)
@@ -160,7 +160,7 @@ class PortalAutomation:
                     po=order.po,
                     printer=order.printer,
                     automation_status=STATUS_ERROR,
-                    error_explanation="No PRICE label checkbox was selected",
+                    error_explanation="No eligible label checkbox was selected",
                     run_id=self.run_context.run_id,
                     screenshot_path=screenshot,
                     label_request_mode=label_request_mode,
@@ -192,7 +192,7 @@ class PortalAutomation:
                 printer=order.printer,
                 automation_status=STATUS_REQUESTED,
                 error_explanation=(
-                    "Requested PRICE label only" if label_request_mode == LABEL_MODE_PRICE_ONLY else ""
+                    "Requested available labels except CARTON and MASTER-CARTON" if label_request_mode == LABEL_MODE_EXCLUDE_CARTONS else ""
                 ),
                 run_id=self.run_context.run_id,
                 screenshot_path=screenshot,
@@ -217,8 +217,6 @@ class PortalAutomation:
 
     def _fill_po(self, po: str) -> None:
         input_locator = self._first_locator("po_input")
-        input_locator.fill("")
-        self._interaction_delay()
         input_locator.fill(po)
         self._interaction_delay()
 
@@ -371,7 +369,7 @@ class PortalAutomation:
                 statuses.extend(str(status).strip() for status in found if str(status).strip())
         return self._combine_status_lines(statuses) if statuses else ""
 
-    def _select_price_only_labels(self, po: str) -> LabelSelectionResult:
+    def _select_non_carton_labels(self, po: str) -> LabelSelectionResult:
         available_text = str(self.config.texts.get("available_status", "available")).strip().lower()
         script = """
         ({ po, availableText }) => {
@@ -398,12 +396,12 @@ class PortalAutomation:
             const directCells = row => Array.from(row.children)
                 .filter(child => child.tagName === 'TD' || child.tagName === 'TH');
             const canonical = value => normalize(value).toLowerCase();
-            const labelTypes = new Set(['PRICE', 'INFO', 'CARTON', 'MASTER-CARTON']);
+            const excludedTypes = new Set(['CARTON', 'MASTER-CARTON']);
             const result = {
-                foundPrice: false,
-                availablePrice: false,
+                foundEligible: false,
+                availableEligible: false,
                 selectedCount: 0,
-                priceStatuses: [],
+                eligibleStatuses: [],
                 blocked: [],
             };
 
@@ -476,13 +474,13 @@ class PortalAutomation:
                     if (texts.length <= selectIndex) {
                         continue;
                     }
-                    const indexedLabelType = (texts[labelTypeIndex] || '').toUpperCase();
-                    const fallbackLabelType = texts
-                        .map(text => text.toUpperCase())
-                        .find(text => labelTypes.has(text));
-                    const labelType = labelTypes.has(indexedLabelType) ? indexedLabelType : fallbackLabelType;
-                    if (!labelTypes.has(labelType)) {
+                    const rowPo = texts[poIndex] || '';
+                    if (rowPo && rowPo !== po) {
                         continue;
+                    }
+                    const labelType = (texts[labelTypeIndex] || '').toUpperCase();
+                    if (!labelType) {
+                        throw new Error('Label type missing; cannot safely exclude cartons');
                     }
                     const status = texts[statusIndex]
                         || texts.find(text => canonical(text).includes(availableText))
@@ -490,16 +488,16 @@ class PortalAutomation:
                         || '';
                     const checkbox = cells[selectIndex]?.querySelector("input[type='checkbox']")
                         || row.querySelector("input[type='checkbox']");
-                    const isAvailable = canonical(status).includes(availableText);
-                    const shouldSelect = labelType === 'PRICE' && isAvailable;
+                    const isAvailable = canonical(status) === availableText;
+                    const shouldSelect = !excludedTypes.has(labelType) && isAvailable;
 
-                    if (labelType === 'PRICE') {
-                        result.foundPrice = true;
+                    if (!excludedTypes.has(labelType)) {
+                        result.foundEligible = true;
                         if (status) {
-                            result.priceStatuses.push(status);
+                            result.eligibleStatuses.push(status);
                         }
                         if (isAvailable) {
-                            result.availablePrice = true;
+                            result.availableEligible = true;
                         }
                     }
                     setChecked(checkbox, shouldSelect, labelType);
@@ -507,11 +505,11 @@ class PortalAutomation:
                         result.selectedCount += 1;
                     }
                     if (!shouldSelect && checkbox && checkbox.checked) {
-                        result.blocked.push(`${labelType}: non-PRICE checkbox remained selected`);
+                        result.blocked.push(`${labelType}: excluded or unavailable checkbox remained selected`);
                     }
                 }
             }
-            result.priceStatuses = Array.from(new Set(result.priceStatuses));
+            result.eligibleStatuses = Array.from(new Set(result.eligibleStatuses));
             return result;
         }
         """
@@ -520,13 +518,13 @@ class PortalAutomation:
         for context in self._search_contexts():
             try:
                 found = context.evaluate(script, {"po": po, "availableText": available_text})
-            except PlaywrightError:
-                continue
+            except PlaywrightError as exc:
+                raise RuntimeError("Could not verify label selection") from exc
             if isinstance(found, dict):
                 selection_results.append(found)
 
         if not selection_results:
-            return LabelSelectionResult(status_text="PRICE label row not found", selected_count=0)
+            return LabelSelectionResult(status_text="No eligible label rows found", selected_count=0)
 
         blocked = [
             str(item)
@@ -535,41 +533,41 @@ class PortalAutomation:
             if item
         ]
         if blocked:
-            raise RuntimeError("Could not select only PRICE label: " + self._combine_status_lines(blocked))
+            raise RuntimeError("Could not safely select labels excluding cartons: " + self._combine_status_lines(blocked))
 
         selected_count = sum(int(result.get("selectedCount") or 0) for result in selection_results)
-        price_statuses = [
+        eligible_statuses = [
             str(status)
             for result in selection_results
-            for status in result.get("priceStatuses", [])
+            for status in result.get("eligibleStatuses", [])
             if status
         ]
-        has_available_price = any(bool(result.get("availablePrice")) for result in selection_results)
-        has_requested_price = any(STATUS_REQUESTED in status.strip().lower() for status in price_statuses)
-        if has_available_price and selected_count > 0:
+        has_available_eligible = any(bool(result.get("availableEligible")) for result in selection_results)
+        has_requested_eligible = any(STATUS_REQUESTED in status.strip().lower() for status in eligible_statuses)
+        if has_available_eligible and selected_count > 0:
             self._interaction_delay()
             return LabelSelectionResult(
                 status_text=str(self.config.texts.get("available_status", "available")),
                 selected_count=selected_count,
             )
-        if has_requested_price:
+        if has_requested_eligible:
             return LabelSelectionResult(
-                status_text=self._combine_status_lines(price_statuses) or STATUS_REQUESTED,
+                status_text=self._combine_status_lines(eligible_statuses) or STATUS_REQUESTED,
                 selected_count=selected_count,
-                skip_explanation="PRICE label already requested",
+                skip_explanation="Eligible labels already requested",
             )
-        if has_available_price:
+        if has_available_eligible:
             return LabelSelectionResult(
-                status_text="PRICE label is available, but no checkbox was selected",
-                selected_count=selected_count,
-            )
-        if any(bool(result.get("foundPrice")) for result in selection_results):
-            status_text = self._combine_status_lines(price_statuses) or "unknown status"
-            return LabelSelectionResult(
-                status_text="PRICE label is not available: " + status_text,
+                status_text="Eligible label is available, but no checkbox was selected",
                 selected_count=selected_count,
             )
-        return LabelSelectionResult(status_text="PRICE label row not found", selected_count=selected_count)
+        if any(bool(result.get("foundEligible")) for result in selection_results):
+            status_text = self._combine_status_lines(eligible_statuses) or "unknown status"
+            return LabelSelectionResult(
+                status_text="Eligible labels are not available: " + status_text,
+                selected_count=selected_count,
+            )
+        return LabelSelectionResult(status_text="No eligible label rows found", selected_count=selected_count)
 
     def _select_printer(self, printer_code: str) -> None:
         target = self.config.printer_target(printer_code)
@@ -845,7 +843,7 @@ class PortalAutomation:
             random.uniform(
                 float(timing.get("interaction_delay_min_seconds", 0.5)),
                 float(timing.get("interaction_delay_max_seconds", 2.0)),
-            )
+            ) / max(1.0, min(3.0, float(timing.get("speed_multiplier", 3.0))))
         )
 
     def _load_delay(self) -> None:
@@ -855,7 +853,7 @@ class PortalAutomation:
             random.uniform(
                 float(timing.get("load_delay_min_seconds", 1.0)),
                 float(timing.get("load_delay_max_seconds", 3.0)),
-            )
+            ) / max(1.0, min(3.0, float(timing.get("speed_multiplier", 3.0))))
         )
 
     def _page(self) -> Page:

@@ -7,7 +7,7 @@ from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
 from po_label_app.excel_io import load_input_workbook
-from po_label_app.models import LABEL_MODE_PRICE_ONLY, ProcessingResult, STATUS_REQUESTED
+from po_label_app.models import LABEL_MODE_EXCLUDE_CARTONS, ProcessingResult, STATUS_REQUESTED
 from po_label_app.tracking import TrackingWorkbook
 
 
@@ -80,9 +80,9 @@ class ExcelTrackingTests(unittest.TestCase):
                     po="5946693",
                     printer="VN",
                     automation_status=STATUS_REQUESTED,
-                    error_explanation="Requested PRICE label only",
+                    error_explanation="Requested available labels except CARTON and MASTER-CARTON",
                     run_id="run002",
-                    label_request_mode=LABEL_MODE_PRICE_ONLY,
+                    label_request_mode=LABEL_MODE_EXCLUDE_CARTONS,
                 )
             )
 
@@ -93,7 +93,7 @@ class ExcelTrackingTests(unittest.TestCase):
             self.assertEqual(sheet.cell(row=2, column=headers.index("PO") + 1).value, "5946693")
             self.assertEqual(
                 sheet.cell(row=2, column=headers.index("Label Request Mode") + 1).value,
-                LABEL_MODE_PRICE_ONLY,
+                LABEL_MODE_EXCLUDE_CARTONS,
             )
 
 
